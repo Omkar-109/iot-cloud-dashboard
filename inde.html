@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Sensor Dashboard | Real-time Monitoring</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1><i class="fas fa-thermometer-half"></i> IoT Sensor Dashboard</h1>
+            <div class="header-info">
+                <span id="last-update" class="update-time">Last Updated: Loading...</span>
+                <button class="refresh-btn" onclick="refreshDashboard()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Status Overview Cards -->
+        <div class="cards-grid">
+            <div class="card temperature-card">
+                <div class="card-header">
+                    <h3><i class="fas fa-thermometer-half"></i> Temperature</h3>
+                    <div class="status-indicator" id="temp-indicator"></div>
+                </div>
+                <div class="metric-value" id="temperature">--°C</div>
+                <div class="metric-subtitle">
+                    <span id="temp-fahrenheit">--°F</span>
+                    <span class="threshold">Threshold: ≤35°C</span>
+                </div>
+                <div class="trend" id="temp-trend">
+                    <i class="fas fa-arrow-up"></i> +0.5°C from last hour
+                </div>
+            </div>
+
+            <div class="card humidity-card">
+                <div class="card-header">
+                    <h3><i class="fas fa-tint"></i> Humidity</h3>
+                    <div class="status-indicator" id="humidity-indicator"></div>
+                </div>
+                <div class="metric-value" id="humidity">--%</div>
+                <div class="metric-subtitle">
+                    <span class="threshold">Threshold: ≤80%</span>
+                </div>
+                <div class="trend" id="humidity-trend">
+                    <i class="fas fa-arrow-down"></i> -2% from last hour
+                </div>
+            </div>
+
+            <div class="card heat-index-card">
+                <div class="card-header">
+                    <h3><i class="fas fa-fire"></i> Heat Index</h3>
+                    <div class="status-indicator" id="heat-indicator"></div>
+                </div>
+                <div class="metric-value" id="heat-index">--°C</div>
+                <div class="metric-subtitle">
+                    <span id="heat-fahrenheit">--°F</span>
+                    <span class="threshold">Feels like temperature</span>
+                </div>
+                <div class="trend" id="heat-trend">
+                    <i class="fas fa-equals"></i> Stable
+                </div>
+            </div>
+
+            <div class="card system-card">
+                <div class="card-header">
+                    <h3><i class="fas fa-microchip"></i> System Status</h3>
+                    <div class="status-indicator status-online"></div>
+                </div>
+                <div class="system-info">
+                    <div class="info-row">
+                        <span class="label">Device:</span>
+                        <span id="device-id">esp32-sensor-01</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Location:</span>
+                        <span id="location">Plant_Floor_1</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Sensor:</span>
+                        <span id="sensor-status">DHT11 Active</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">WiFi:</span>
+                        <span id="wifi-signal">-45 dBm Strong</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-section">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3><i class="fas fa-chart-line"></i> Temperature & Humidity Trends</h3>
+                    <div class="time-selector">
+                        <button class="time-btn active" data-range="1h">1H</button>
+                        <button class="time-btn" data-range="6h">6H</button>
+                        <button class="time-btn" data-range="24h">24H</button>
+                        <button class="time-btn" data-range="7d">7D</button>
+                    </div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Alert History</h3>
+                </div>
+                <div class="alerts-list" id="alerts-container">
+                    <!-- Alerts will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Section -->
+        <div class="stats-section">
+            <div class="stats-card">
+                <h3><i class="fas fa-chart-bar"></i> Today's Summary</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="avg-temp">--°C</span>
+                        <span class="stat-label">Avg Temperature</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="max-temp">--°C</span>
+                        <span class="stat-label">Max Temperature</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="avg-humidity">--%</span>
+                        <span class="stat-label">Avg Humidity</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="alert-count">--</span>
+                        <span class="stat-label">Alerts Today</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="data-points">--</span>
+                        <span class="stat-label">Data Points</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="uptime">99.8%</span>
+                        <span class="stat-label">Uptime</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="container">
+            <p>&copy; 2025 IoT Sensor Monitoring System | 
+               <a href="https://portal.azure.com" target="_blank">Azure Portal</a> | 
+               <span id="connection-status">🟢 Connected</span>
+            </p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
