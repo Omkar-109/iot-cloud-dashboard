@@ -1,83 +1,126 @@
 // Global variables
 let temperatureChart;
-let currentData = {
-    temperature: 25.3,
-    temperatureF: 77.5,
-    humidity: 65,
-    heatIndexC: 27.1,
-    heatIndexF: 80.8,
-    deviceId: 'esp32-sensor-01',
-    location: 'Plant_Floor_1',
-    sensorStatus: 'DHT11 Active',
-    wifiRSSI: -45
-};
+let currentData = {};
+let historicalData = { labels: [], temperature: [], humidity: [] };
 
-// Sample historical data for chart
-const historicalData = {
-    labels: [],
-    temperature: [],
-    humidity: []
-};
+// API Configuration - Replace with your Function App URL
+const API_BASE_URL = 'iot-dashboard-api-f0e6dxhdgqaudger.eastasia-01.azurewebsites.net/api';
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
-    initializeDashboard();
+    console.log('🚀 Initializing IoT Dashboard...');
     loadDashboardData();
     initializeChart();
     setInterval(refreshDashboard, 60000); // Auto-refresh every minute
 });
 
-function initializeDashboard() {
-    // Generate sample time labels
-    const now = new Date();
-    for (let i = 23; i >= 0; i--) {
-        const time = new Date(now - i * 60 * 60 * 1000);
-        historicalData.labels.push(time.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        }));
+async function loadDashboardData() {
+    console.log('📡 Loading real-time data from database...');
+    
+    try {
+        // Show loading state
+        showLoadingState();
         
-        // Generate sample data with some variation
-        const baseTemp = 25 + Math.sin(i * 0.3) * 3 + (Math.random() - 0.5) * 2;
-        const baseHumidity = 65 + Math.cos(i * 0.4) * 8 + (Math.random() - 0.5) * 5;
+        // Fetch current data
+        await fetchCurrentData();
         
-        historicalData.temperature.push(Math.round(baseTemp * 10) / 10);
-        historicalData.humidity.push(Math.round(baseHumidity));
+        // Fetch historical data
+        await fetchHistoricalData();
+        
+        // Fetch statistics
+        await fetchStatistics();
+        
+        // Update all dashboard components
+        updateCurrentValues();
+        updateSystemStatus();
+        updateChart();
+        updateLastUpdatedTime();
+        
+        // Hide loading state
+        hideLoadingState();
+        
+        console.log('✅ Dashboard data loaded successfully');
+        
+    } catch (error) {
+        console.error('❌ Error loading dashboard data:', error);
+        showErrorState();
     }
 }
 
-function loadDashboardData() {
-    // In a real implementation, this would fetch data from your SQL Database
-    // For now, we'll simulate with dynamic data
-    updateCurrentValues();
-    updateSystemStatus();
-    updateStatistics();
-    updateAlerts();
-    updateLastUpdatedTime();
+async function fetchCurrentData() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/getCurrentData`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        currentData = await response.json();
+        console.log('📊 Current data:', currentData);
+        
+    } catch (error) {
+        console.error('❌ Error fetching current data:', error);
+        // Use fallback data
+        currentData = {
+            temperature: 0,
+            temperatureF: 0,
+            humidity: 0,
+            heatIndexC: 0,
+            heatIndexF: 0,
+            deviceId: 'esp32-sensor-01',
+            location: 'Unknown',
+            sensorStatus: 'Offline',
+            wifiRSSI: -100
+        };
+    }
+}
+
+async function fetchHistoricalData(hours = 24) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/getHistoricalData?hours=${hours}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        historicalData = await response.json();
+        console.log(`📈 Historical data (${hours}h):`, historicalData.labels.length, 'points');
+        
+    } catch (error) {
+        console.error('❌ Error fetching historical data:', error);
+        // Use empty data
+        historicalData = { labels: [], temperature: [], humidity: [] };
+    }
+}
+
+async function fetchStatistics() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/getStatistics`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const stats = await response.json();
+        console.log('📊 Statistics:', stats);
+        
+        // Update statistics in DOM
+        document.getElementById('avg-temp').textContent = `${stats.avgTemp}°C`;
+        document.getElementById('max-temp').textContent = `${stats.maxTemp}°C`;
+        document.getElementById('avg-humidity').textContent = `${stats.avgHumidity}%`;
+        document.getElementById('alert-count').textContent = stats.alertCount;
+        document.getElementById('data-points').textContent = stats.dataPoints.toLocaleString();
+        document.getElementById('uptime').textContent = `${stats.uptime}%`;
+        
+    } catch (error) {
+        console.error('❌ Error fetching statistics:', error);
+    }
 }
 
 function updateCurrentValues() {
-    // Add some realistic variation to the data
-    const variation = (Math.random() - 0.5) * 0.5;
-    currentData.temperature = Math.round((25 + variation) * 10) / 10;
-    currentData.temperatureF = Math.round((currentData.temperature * 9/5 + 32) * 10) / 10;
-    
-    const humidityVariation = (Math.random() - 0.5) * 3;
-    currentData.humidity = Math.round(65 + humidityVariation);
-    
-    // Calculate heat index (simplified formula)
-    currentData.heatIndexC = Math.round((currentData.temperature + 0.5 * currentData.humidity/10) * 10) / 10;
-    currentData.heatIndexF = Math.round((currentData.heatIndexC * 9/5 + 32) * 10) / 10;
-
-    // Update DOM elements
+    // Update current values from real data
     document.getElementById('temperature').textContent = `${currentData.temperature}°C`;
     document.getElementById('temp-fahrenheit').textContent = `${currentData.temperatureF}°F`;
     document.getElementById('humidity').textContent = `${currentData.humidity}%`;
     document.getElementById('heat-index').textContent = `${currentData.heatIndexC}°C`;
     document.getElementById('heat-fahrenheit').textContent = `${currentData.heatIndexF}°F`;
 
-    // Update status indicators
+    // Update status indicators based on real thresholds
     updateStatusIndicators();
+    
+    // Update trends (compare with previous values if available)
+    updateTrends();
 }
 
 function updateStatusIndicators() {
@@ -85,7 +128,7 @@ function updateStatusIndicators() {
     const humidityIndicator = document.getElementById('humidity-indicator');
     const heatIndicator = document.getElementById('heat-indicator');
 
-    // Temperature status
+    // Temperature status (your actual thresholds)
     if (currentData.temperature > 35) {
         tempIndicator.className = 'status-indicator status-alert';
     } else if (currentData.temperature > 30) {
@@ -94,7 +137,7 @@ function updateStatusIndicators() {
         tempIndicator.className = 'status-indicator status-normal';
     }
 
-    // Humidity status
+    // Humidity status (your actual thresholds)
     if (currentData.humidity > 80) {
         humidityIndicator.className = 'status-indicator status-alert';
     } else if (currentData.humidity > 75) {
@@ -114,73 +157,58 @@ function updateStatusIndicators() {
 }
 
 function updateSystemStatus() {
-    document.getElementById('device-id').textContent = currentData.deviceId;
-    document.getElementById('location').textContent = currentData.location;
-    document.getElementById('sensor-status').textContent = currentData.sensorStatus;
+    document.getElementById('device-id').textContent = currentData.deviceId || 'Unknown';
+    document.getElementById('location').textContent = currentData.location || 'Unknown';
+    document.getElementById('sensor-status').textContent = currentData.sensorStatus || 'Unknown';
     
-    // WiFi signal strength
+    // WiFi signal strength from real data
     const wifiElement = document.getElementById('wifi-signal');
-    if (currentData.wifiRSSI > -50) {
-        wifiElement.textContent = `${currentData.wifiRSSI} dBm Strong`;
+    const wifiRSSI = currentData.wifiRSSI || -100;
+    
+    if (wifiRSSI > -50) {
+        wifiElement.textContent = `${wifiRSSI} dBm Strong`;
         wifiElement.style.color = '#27ae60';
-    } else if (currentData.wifiRSSI > -70) {
-        wifiElement.textContent = `${currentData.wifiRSSI} dBm Good`;
+    } else if (wifiRSSI > -70) {
+        wifiElement.textContent = `${wifiRSSI} dBm Good`;  
         wifiElement.style.color = '#f39c12';
     } else {
-        wifiElement.textContent = `${currentData.wifiRSSI} dBm Weak`;
+        wifiElement.textContent = `${wifiRSSI} dBm Weak`;
         wifiElement.style.color = '#e74c3c';
     }
 }
 
-function updateStatistics() {
-    // Calculate daily statistics from historical data
-    const temps = historicalData.temperature;
-    const humidities = historicalData.humidity;
-    
-    const avgTemp = Math.round((temps.reduce((a, b) => a + b, 0) / temps.length) * 10) / 10;
-    const maxTemp = Math.max(...temps);
-    const avgHumidity = Math.round(humidities.reduce((a, b) => a + b, 0) / humidities.length);
-    
-    document.getElementById('avg-temp').textContent = `${avgTemp}°C`;
-    document.getElementById('max-temp').textContent = `${maxTemp}°C`;
-    document.getElementById('avg-humidity').textContent = `${avgHumidity}%`;
-    document.getElementById('alert-count').textContent = '2';
-    document.getElementById('data-points').textContent = '1,440';
-}
-
-function updateAlerts() {
-    const alertsContainer = document.getElementById('alerts-container');
-    const alerts = [
-        {
-            type: 'high',
-            title: 'High Temperature Alert',
-            message: 'Temperature exceeded 35°C',
-            time: '2 hours ago',
-            device: 'esp32-sensor-01'
-        },
-        {
-            type: 'medium',
-            title: 'Humidity Warning',
-            message: 'Humidity approaching upper threshold',
-            time: '4 hours ago',
-            device: 'esp32-sensor-01'
-        },
-        {
-            type: 'low',
-            title: 'System Notice',
-            message: 'Daily data backup completed',
-            time: '6 hours ago',
-            device: 'system'
+function updateTrends() {
+    // Calculate trends from historical data
+    if (historicalData.temperature.length >= 2) {
+        const recent = historicalData.temperature.slice(-2);
+        const trend = recent[1] - recent[0];
+        
+        const tempTrend = document.getElementById('temp-trend');
+        if (trend > 0.5) {
+            tempTrend.innerHTML = `<i class="fas fa-arrow-up"></i> +${trend.toFixed(1)}°C from last reading`;
+            tempTrend.style.color = '#e74c3c';
+        } else if (trend < -0.5) {
+            tempTrend.innerHTML = `<i class="fas fa-arrow-down"></i> ${trend.toFixed(1)}°C from last reading`;
+            tempTrend.style.color = '#3498db';
+        } else {
+            tempTrend.innerHTML = `<i class="fas fa-equals"></i> Stable`;
+            tempTrend.style.color = '#27ae60';
         }
-    ];
-
-    alertsContainer.innerHTML = alerts.map(alert => `
-        <div class="alert-item alert-${alert.type}">
-            <div class="alert-title">${alert.title}</div>
-            <div class="alert-message">${alert.message}</div>
-            <div class="alert-time">${alert.time} • ${alert.device}</div>
-        </div>
-    `).join('');
+    }
+    
+    if (historicalData.humidity.length >= 2) {
+        const recent = historicalData.humidity.slice(-2);
+        const trend = recent[1] - recent[0];
+        
+        const humidityTrend = document.getElementById('humidity-trend');
+        if (trend > 2) {
+            humidityTrend.innerHTML = `<i class="fas fa-arrow-up"></i> +${trend.toFixed(0)}% from last reading`;
+        } else if (trend < -2) {
+            humidityTrend.innerHTML = `<i class="fas fa-arrow-down"></i> ${trend.toFixed(0)}% from last reading`;
+        } else {
+            humidityTrend.innerHTML = `<i class="fas fa-equals"></i> Stable`;
+        }
+    }
 }
 
 function initializeChart() {
@@ -239,9 +267,7 @@ function initializeChart() {
                     title: {
                         display: true,
                         text: 'Temperature (°C)'
-                    },
-                    min: 20,
-                    max: 40
+                    }
                 },
                 y1: {
                     type: 'linear',
@@ -251,19 +277,22 @@ function initializeChart() {
                         display: true,
                         text: 'Humidity (%)'
                     },
-                    min: 40,
-                    max: 90,
                     grid: {
                         drawOnChartArea: false,
                     },
                 }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
             }
         }
     });
+}
+
+function updateChart() {
+    if (temperatureChart && historicalData.labels.length > 0) {
+        temperatureChart.data.labels = historicalData.labels;
+        temperatureChart.data.datasets[0].data = historicalData.temperature;
+        temperatureChart.data.datasets[1].data = historicalData.humidity;
+        temperatureChart.update();
+    }
 }
 
 function updateLastUpdatedTime() {
@@ -272,61 +301,52 @@ function updateLastUpdatedTime() {
         `Last Updated: ${now.toLocaleString()}`;
 }
 
-function refreshDashboard() {
-    console.log('🔄 Refreshing dashboard data...');
-    
-    // Add loading state
-    document.body.classList.add('loading');
-    
-    setTimeout(() => {
-        loadDashboardData();
-        
-        // Update chart with new data point
-        const now = new Date();
-        historicalData.labels.push(now.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        }));
-        historicalData.labels.shift(); // Remove oldest point
-        
-        historicalData.temperature.push(currentData.temperature);
-        historicalData.temperature.shift();
-        
-        historicalData.humidity.push(currentData.humidity);
-        historicalData.humidity.shift();
-        
-        temperatureChart.update();
-        
-        // Remove loading state
-        document.body.classList.remove('loading');
-        
-        console.log('✅ Dashboard refreshed successfully');
-    }, 1000);
+function showLoadingState() {
+    document.body.style.opacity = '0.7';
 }
 
-// Time range selector for chart
-document.addEventListener('click', function(e) {
+function hideLoadingState() {
+    document.body.style.opacity = '1';
+}
+
+function showErrorState() {
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 9999;
+        background: #e74c3c; color: white; padding: 15px 20px;
+        border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    `;
+    errorDiv.innerHTML = '⚠️ Unable to load real-time data. Check API connection.';
+    document.body.appendChild(errorDiv);
+    
+    setTimeout(() => errorDiv.remove(), 5000);
+}
+
+async function refreshDashboard() {
+    console.log('🔄 Refreshing dashboard with real data...');
+    await loadDashboardData();
+}
+
+// Time range selector
+document.addEventListener('click', async function(e) {
     if (e.target.classList.contains('time-btn')) {
         document.querySelectorAll('.time-btn').forEach(btn => 
             btn.classList.remove('active'));
         e.target.classList.add('active');
         
         const range = e.target.dataset.range;
-        console.log(`📊 Changing chart range to: ${range}`);
-        // Here you would update the chart with different time ranges
+        let hours;
+        
+        switch(range) {
+            case '1h': hours = 1; break;
+            case '6h': hours = 6; break;
+            case '24h': hours = 24; break;
+            case '7d': hours = 168; break;
+            default: hours = 24;
+        }
+        
+        console.log(`📊 Loading ${range} of data...`);
+        await fetchHistoricalData(hours);
+        updateChart();
     }
 });
-
-// Connection status simulation
-setInterval(() => {
-    const connectionStatus = document.getElementById('connection-status');
-    const isOnline = Math.random() > 0.05; // 95% uptime simulation
-    
-    if (isOnline) {
-        connectionStatus.innerHTML = '🟢 Connected';
-        connectionStatus.style.color = '#27ae60';
-    } else {
-        connectionStatus.innerHTML = '🔴 Disconnected';
-        connectionStatus.style.color = '#e74c3c';
-    }
-}, 30000); // Check every 30 seconds
