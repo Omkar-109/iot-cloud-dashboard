@@ -4,7 +4,7 @@ let currentData = {};
 let historicalData = { labels: [], temperature: [], humidity: [] };
 
 // API Configuration - Replace with your Function App URL
-const API_BASE_URL = 'iot-dashboard-api-f0e6dxhdgqaudger.eastasia-01.azurewebsites.net/api';
+const API_BASE_URL = 'https://iot-dashboard-api-f0e6dxhdgqaudger.eastasia-01.azurewebsites.net/api';
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
@@ -350,3 +350,4 @@ document.addEventListener('click', async function(e) {
         updateChart();
     }
 });
+
