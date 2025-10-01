@@ -30,6 +30,9 @@ async function loadDashboardData() {
         // Fetch statistics
         await fetchStatistics();
         
+        // Fetch alerts (NEW - added this line)
+        await fetchAlerts();
+        
         // Update all dashboard components
         updateCurrentValues();
         updateSystemStatus();
@@ -46,6 +49,7 @@ async function loadDashboardData() {
         showErrorState();
     }
 }
+
 
 async function fetchCurrentData() {
     try {
@@ -105,6 +109,29 @@ async function fetchStatistics() {
         
     } catch (error) {
         console.error('❌ Error fetching statistics:', error);
+    }
+}
+
+async function fetchAlerts() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/getAlerts`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        console.log('📢 Alerts data:', data);
+        
+        // Update alerts display
+        updateAlertsDisplay(data.alerts);
+        
+        // Update alert count (if different from statistics)
+        if (data.todayCount !== undefined) {
+            document.getElementById('alert-count').textContent = data.todayCount;
+        }
+        
+    } catch (error) {
+        console.error('❌ Error fetching alerts:', error);
+        // Show fallback message
+        updateAlertsDisplay([]);
     }
 }
 
@@ -209,6 +236,91 @@ function updateTrends() {
             humidityTrend.innerHTML = `<i class="fas fa-equals"></i> Stable`;
         }
     }
+}
+
+function updateAlertsDisplay(alerts) {
+    const container = document.getElementById('alerts-container');
+    
+    if (!alerts || alerts.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #27ae60;">
+                <i class="fas fa-check-circle" style="font-size: 2em; margin-bottom: 10px;"></i>
+                <p><strong>✅ No Recent Alerts</strong></p>
+                <p style="color: #7f8c8d; font-size: 0.9em;">All systems operating normally</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = alerts.map(alert => {
+        const alertTime = new Date(alert.AlertTimestamp).toLocaleString();
+        const timeAgo = getTimeAgo(new Date(alert.AlertTimestamp));
+        
+        // Determine alert icon and color
+        let alertIcon, alertColor;
+        switch(alert.Severity.toLowerCase()) {
+            case 'high':
+                alertIcon = 'fas fa-exclamation-triangle';
+                alertColor = '#e74c3c';
+                break;
+            case 'medium':
+                alertIcon = 'fas fa-exclamation-circle';
+                alertColor = '#f39c12';
+                break;
+            default:
+                alertIcon = 'fas fa-info-circle';
+                alertColor = '#3498db';
+        }
+        
+        return `
+            <div class="alert-item alert-${alert.Severity.toLowerCase()}" style="border-left: 4px solid ${alertColor};">
+                <div class="alert-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div class="alert-title" style="font-weight: 600; color: ${alertColor};">
+                        <i class="${alertIcon}"></i> ${alert.AlertType.replace('_', ' ')} - ${alert.DeviceId}
+                    </div>
+                    <div class="alert-severity" style="background: ${alertColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em;">
+                        ${alert.Severity}
+                    </div>
+                </div>
+                
+                <div class="alert-message" style="margin-bottom: 8px; color: #2c3e50;">
+                    ${alert.AlertMessage}
+                </div>
+                
+                <div class="alert-details" style="background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 0.9em;">
+                    <strong>${alert.SensorType}:</strong> 
+                    <span style="color: ${alertColor}; font-weight: bold;">${alert.ActualValue}</span> 
+                    (Threshold: ${alert.ThresholdValue})
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; color: #7f8c8d; font-size: 0.85em;">
+                    <div class="alert-time">
+                        <i class="fas fa-clock"></i> ${timeAgo}
+                    </div>
+                    <div class="alert-location">
+                        <i class="fas fa-map-marker-alt"></i> ${alert.Location || 'Unknown'}
+                    </div>
+                </div>
+                
+                <div style="color: #95a5a6; font-size: 0.8em; margin-top: 4px;">
+                    ${alertTime}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function getTimeAgo(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
 }
 
 function initializeChart() {
@@ -350,4 +462,5 @@ document.addEventListener('click', async function(e) {
         updateChart();
     }
 });
+
 
